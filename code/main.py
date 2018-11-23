@@ -6,6 +6,10 @@ import xgboost as xgb
 import pickle
 from math import radians, cos, sin, asin, sqrt
 
+from xgboost import plot_importance
+from xgboost import plot_tree
+from matplotlib import pyplot as plt
+
 def haversine1(lon1, lat1, lon2, lat2):  # 经度1，纬度1，经度2，纬度2 （十进制度数）
     """
     Calculate the great circle distance between two points
@@ -38,7 +42,7 @@ alluser = data['TERMINALNO'].nunique()
 
 for item in data['TERMINALNO'].unique():
 
-    print('user NO:',item)
+    #print('user NO:',item)
     temp = data.loc[data['TERMINALNO'] == item,:]
     temp.index = range(len(temp))
 
@@ -60,11 +64,12 @@ for item in data['TERMINALNO'].unique():
     ### 地点特征
     startlong = temp.loc[0, 'LONGITUDE']
     startlat  = temp.loc[0, 'LATITUDE']
-    hdis1 = haversine1(startlong, startlat, 113.9177317,22.54334333)  # 距离某一点的距离
+    hdis1 = haversine1(startlong, startlat, 113.9177317,22.54334333)  # 距离某一点的距离 ##感觉距离计算有点问题，可以计算一下所有行程的总路程
 
     # 时间特征
     # temp['weekday'] = temp['TIME'].apply(lambda x:datetime.datetime.fromtimestamp(x).weekday())
-    temp['hour'] = temp['TIME'].apply(lambda x:datetime.datetime.fromtimestamp(x).hour)
+    #temp['hour'] = temp['TIME'].apply(lambda x:datetime.datetime.fromtimestamp(x).hour)
+    temp.loc[:,'hour'] = temp.loc[:,'TIME'].apply(lambda x:datetime.datetime.fromtimestamp(x).hour)
     hour_state = np.zeros([24,1])
     for i in range(24):
         hour_state[i] = temp.loc[temp['hour']==i].shape[0]/float(nsh)
@@ -100,6 +105,8 @@ featurename = ['item', 'num_of_trips', 'num_of_records','num_of_state_0','num_of
     ,'target']
 train1.columns = featurename
 
+print("train1", train1)
+
 print("train data process time:",(datetime.datetime.now()-start_all).seconds)
 
 # Train model
@@ -116,17 +123,21 @@ params = {
     "booster": "gbtree",
     "min_child_weight":5,
     "gamma":0.1,
-    "max_depth": 3,
+    "max_depth": 3, #3
     "eta": 0.009,
     "silent": 1,
     "subsample":0.65,
-    "colsample_bytree":.35,
+    "colsample_bytree":0.35,
     "scale_pos_weight":0.9
     # "nthread":16
 }
 
-df_train = xgb.DMatrix(train1[feature_use].fillna(-1), train1['target'])
+df_train = xgb.DMatrix(train1[feature_use].fillna(-1), train1['target']) #DMatrix(data, label)数据及标签，fillna：填充nan
 gbm = xgb.train(params,df_train,num_boost_round=800)
+
+plot_importance(gbm)
+plot_tree(gbm)
+plt.show()
 
 # save model to file
 pickle.dump(gbm, open("pima.pickle.dat", "wb"))
@@ -139,7 +150,7 @@ test1 = []
 
 for item in data['TERMINALNO'].unique():
 
-    print('user NO:',item)
+    #print('user NO:',item)
 
     temp = data.loc[data['TERMINALNO'] == item,:]
     temp.index = range(len(temp))
@@ -167,7 +178,8 @@ for item in data['TERMINALNO'].unique():
 
     # 时间特征
     # temp['weekday'] = temp['TIME'].apply(lambda x:datetime.datetime.fromtimestamp(x).weekday())
-    temp['hour'] = temp['TIME'].apply(lambda x:datetime.datetime.fromtimestamp(x).hour)
+    #temp['hour'] = temp['TIME'].apply(lambda x:datetime.datetime.fromtimestamp(x).hour)
+    temp.loc[:, 'hour'] = temp.loc[:, 'TIME'].apply(lambda x: datetime.datetime.fromtimestamp(x).hour)
     hour_state = np.zeros([24,1])
     for i in range(24):
         hour_state[i] = temp.loc[temp['hour']==i].shape[0]/float(nsh)
